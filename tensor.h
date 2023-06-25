@@ -39,13 +39,13 @@ public:
 
 template <typename T> Tensor<T> fill(std::vector<int> dims, float val) {
   Tensor<T> tensor(dims);
-  //   rocprim::fill(tensor.begin(), tensor.end(), val);
+  thrust::fill(tensor.begin(), tensor.end(), val);
   return tensor;
 }
 
 template <typename T> Tensor<T> zeros(std::vector<int> dims) {
   Tensor<T> tensor(dims);
-  //   rocprim::fill(tensor.begin(), tensor.end(), 0.f);
+  thrust::fill(tensor.begin(), tensor.end(), 0.f);
   return tensor;
 }
 
