@@ -1,16 +1,16 @@
+#include "tensor.h"
 #include <chrono>
 #include <cstdint>
+#include <hip/hip_runtime.h>
+#include <hiprand/hiprand.h>
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <rocblas/rocblas.h>
 #include <sstream>
 #include <stdexcept>
 #include <tuple>
 #include <vector>
-#include <hip/hip_runtime.h>
-#include <hiprand/hiprand.h>
-#include <rocblas/rocblas.h>
-#include "tensor.h"
 
 // Vector saves m, n, k, a_t, b_t
 std::vector<std::tuple<int, int, int, bool, bool>> inference_server_set = {
@@ -19,8 +19,7 @@ std::vector<std::tuple<int, int, int, bool, bool>> inference_server_set = {
 
 template <typename T1, typename T2>
 int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
-              rocblas_handle rocblas_handle)
-{
+              rocblas_handle rocblas_handle) {
 
   int m = C.dims()[0];
   int k = a_t ? A.dims()[0] : A.dims()[1];
@@ -28,7 +27,8 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
 
   const int alpha = 1.f;
   const int beta = 1.f;
-  rocblas_datatype aType = rocblas_datatype_f32_r; // _r for real vs. _c for complex
+  rocblas_datatype aType =
+      rocblas_datatype_f32_r; // _r for real vs. _c for complex
   rocblas_datatype bType = rocblas_datatype_f32_r;
   rocblas_datatype cType = rocblas_datatype_f32_r;
   rocblas_datatype dType = rocblas_datatype_f32_r;
@@ -76,10 +76,10 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
   auto end = std::chrono::steady_clock::now();
 
   stat = rocblas_gemm_ex(rocblas_handle, transA, transB, m, n, k, &alpha,
-                          A.begin(), aType, A.dims()[0], B.begin(), bType,
-                          B.dims()[0], &beta, C.begin(), cType, C.dims()[0],
-                          C.begin(), cType, C.dims()[0], computeType, algo,
-                          solutionIndex, flags);
+                         A.begin(), aType, A.dims()[0], B.begin(), bType,
+                         B.dims()[0], &beta, C.begin(), cType, C.dims()[0],
+                         C.begin(), cType, C.dims()[0], computeType, algo,
+                         solutionIndex, flags);
   if (stat != rocblas_status_success) {
     throw std::runtime_error("gemm failed");
   }
@@ -90,10 +90,10 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
 
   for (int i = 0; i < numRepeats; ++i) {
     stat = rocblas_gemm_ex(rocblas_handle, transA, transB, m, n, k, &alpha,
-                            A.begin(), aType, A.dims()[0], B.begin(), bType,
-                            B.dims()[0], &beta, C.begin(), cType, C.dims()[0],
-                            C.begin(), cType, C.dims()[0], computeType, algo,
-                            solutionIndex, flags);
+                           A.begin(), aType, A.dims()[0], B.begin(), bType,
+                           B.dims()[0], &beta, C.begin(), cType, C.dims()[0],
+                           C.begin(), cType, C.dims()[0], computeType, algo,
+                           solutionIndex, flags);
 
     if (stat != rocblas_status_success) {
       throw std::runtime_error("gemm failed");
@@ -165,14 +165,14 @@ int main(int argc, char **argv) {
         std::cout << "," << std::setprecision(6) << time_us / 1000.0;
       }
       // fp16-f16 benchmark
-     {
-      auto a = rand<uint16_t>({a_t ? k : m, a_t ? m : k}, hiprand_gen);
-      auto b = rand<uint16_t>({b_t ? n : k, b_t ? k : n}, hiprand_gen);
-      auto c = zeros<uint16_t>({m, n});
-      time_us =
-          time_gemm<uint16_t, uint16_t>(a, b, c, a_t, b_t, rocblas_handle);
-      std::cout << "," << std::setprecision(6) << time_us / 1000.0;
-     }
+      {
+        auto a = rand<uint16_t>({a_t ? k : m, a_t ? m : k}, hiprand_gen);
+        auto b = rand<uint16_t>({b_t ? n : k, b_t ? k : n}, hiprand_gen);
+        auto c = zeros<uint16_t>({m, n});
+        time_us =
+            time_gemm<uint16_t, uint16_t>(a, b, c, a_t, b_t, rocblas_handle);
+        std::cout << "," << std::setprecision(6) << time_us / 1000.0;
+      }
 
       // int8-int32 benchmark
       {

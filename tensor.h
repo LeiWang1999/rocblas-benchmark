@@ -39,13 +39,13 @@ public:
 
 template <typename T> Tensor<T> fill(std::vector<int> dims, float val) {
   Tensor<T> tensor(dims);
-//   rocprim::fill(tensor.begin(), tensor.end(), val);
+  //   rocprim::fill(tensor.begin(), tensor.end(), val);
   return tensor;
 }
 
 template <typename T> Tensor<T> zeros(std::vector<int> dims) {
   Tensor<T> tensor(dims);
-//   rocprim::fill(tensor.begin(), tensor.end(), 0.f);
+  //   rocprim::fill(tensor.begin(), tensor.end(), 0.f);
   return tensor;
 }
 
@@ -67,6 +67,7 @@ rand(std::vector<int> dims, hiprandGenerator_t hiprand_gen) {
   thrust::copy(tensor_f.begin(), tensor_f.end(), tensor.begin());
   return tensor;
 }
+
 void pad_dim(int &dim, int pad_v) {
   assert(pad_v > 0);
   if (dim % pad_v) {
