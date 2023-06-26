@@ -198,7 +198,7 @@ int main(int argc, char **argv) {
       std::cout << "rocBLAS init failed" << std::endl;
     }
 
-    std::cout << "m,n,k,a_t,b_t,fp32 time (msec),fp16-f32 time (msec), f16-f16 "
+    std::cout << "m,n,k,a_t,b_t,enable_tune,fp32 time (msec),fp16-f32 time (msec), f16-f16 "
                  "time (msec), int8-int32 time (msec)"
               << std::endl;
 
