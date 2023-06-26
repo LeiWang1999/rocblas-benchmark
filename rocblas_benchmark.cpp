@@ -6,27 +6,45 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <rocblas/internal/rocblas-beta.h>
 #include <rocblas/rocblas.h>
 #include <sstream>
 #include <stdexcept>
 #include <tuple>
 #include <vector>
+#define CHECK_ROCBLAS_ERROR(error)                                             \
+  if (error != rocblas_status_success) {                                       \
+    std::stringstream ss;                                                      \
+    ss << "rocBLAS error " << error << " at line " << __LINE__ << std::endl;   \
+    throw std::runtime_error(ss.str());                                        \
+  }
 
-// Vector saves m, n, k, a_t, b_t
-std::vector<std::tuple<int, int, int, bool, bool>> inference_server_set = {
-    std::make_tuple(1024, 1024, 1024, false, false),
+// Vector saves m, n, k, a_t, b_t, enable_tune
+std::vector<std::tuple<int, int, int, bool, bool, bool>> inference_server_set =
+    {
+        std::make_tuple(1024, 1024, 1024, false, false, false),
+        std::make_tuple(1024, 1024, 1024, false, false, true),
 };
 
 template <typename T1, typename T2>
 int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
-              rocblas_handle rocblas_handle) {
+              rocblas_handle rocblas_handle, bool enable_tune = true) {
 
   int m = C.dims()[0];
   int k = a_t ? A.dims()[0] : A.dims()[1];
   int n = C.dims()[1];
+  int warp_up_iters = 1;
+  int numRepeats = 10;
 
   const int alpha = 1.f;
   const int beta = 1.f;
+  rocblas_status stat;
+
+  rocblas_operation transA =
+      a_t ? rocblas_operation_transpose : rocblas_operation_none;
+  rocblas_operation transB =
+      b_t ? rocblas_operation_transpose : rocblas_operation_none;
+
   rocblas_datatype aType =
       rocblas_datatype_f32_r; // _r for real vs. _c for complex
   rocblas_datatype bType = rocblas_datatype_f32_r;
@@ -63,17 +81,68 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
     }
   }
 
-  int numRepeats = 10;
-  rocblas_status stat;
+  if (enable_tune) {
+    auto best_time = std::numeric_limits<double>::max();
+    auto best_sol = 0;
+    algo = rocblas_gemm_algo_standard;
+    solutionIndex = 0;
+    flags = rocblas_gemm_flags_none;
+    // Get all solutions
+    rocblas_int n_solutions;
+    CHECK_ROCBLAS_ERROR(rocblas_gemm_ex_get_solutions(
+        rocblas_handle, transA, transB, m, n, k, &alpha, A.begin(), aType,
+        A.dims()[0], B.begin(), bType, B.dims()[0], &beta, C.begin(), cType,
+        C.dims()[0], C.begin(), cType, C.dims()[0], computeType,
+        rocblas_gemm_algo_solution_index, rocblas_gemm_flags_none, NULL,
+        &n_solutions));
 
-  rocblas_operation transA =
-      a_t ? rocblas_operation_transpose : rocblas_operation_none;
-  rocblas_operation transB =
-      b_t ? rocblas_operation_transpose : rocblas_operation_none;
+    std::vector<rocblas_int> solutions(n_solutions);
+    CHECK_ROCBLAS_ERROR(rocblas_gemm_ex_get_solutions(
+        rocblas_handle, transA, transB, m, n, k, &alpha, A.begin(), aType,
+        A.dims()[0], B.begin(), bType, B.dims()[0], &beta, C.begin(), cType,
+        C.dims()[0], C.begin(), cType, C.dims()[0], computeType,
+        rocblas_gemm_algo_solution_index, rocblas_gemm_flags_none,
+        solutions.data(), &n_solutions));
+
+    for (auto sol : solutions) {
+      // warmup
+      for (rocblas_int c = 0; c < warp_up_iters; ++c) {
+        // run with solutions
+        CHECK_ROCBLAS_ERROR(rocblas_gemm_ex(
+            rocblas_handle, transA, transB, m, n, k, &alpha, A.begin(), aType,
+            A.dims()[0], B.begin(), bType, B.dims()[0], &beta, C.begin(), cType,
+            C.dims()[0], C.begin(), cType, C.dims()[0], computeType, algo,
+            solutionIndex, flags));
+      }
+      hipStream_t stream;
+      CHECK_ROCBLAS_ERROR(rocblas_get_stream(rocblas_handle, &stream));
+      auto start = std::chrono::steady_clock::now();
+
+      // timing loop
+      for (rocblas_int c = 0; c < numRepeats; ++c) {
+        CHECK_ROCBLAS_ERROR(rocblas_gemm_ex(
+            rocblas_handle, transA, transB, m, n, k, &alpha, A.begin(), aType,
+            A.dims()[0], B.begin(), bType, B.dims()[0], &beta, C.begin(), cType,
+            C.dims()[0], C.begin(), cType, C.dims()[0], computeType, algo,
+            solutionIndex, flags));
+      }
+
+      auto end = std::chrono::steady_clock::now();
+
+      auto time =
+          std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+              .count();
+
+      double avg_time = numRepeats ? (time / numRepeats) : 0;
+      if (avg_time < best_time) {
+        best_sol = sol;
+        best_time = avg_time;
+      }
+    }
+    solutionIndex = best_sol;
+  }
 
   auto start = std::chrono::steady_clock::now();
-
-  auto end = std::chrono::steady_clock::now();
 
   stat = rocblas_gemm_ex(rocblas_handle, transA, transB, m, n, k, &alpha,
                          A.begin(), aType, A.dims()[0], B.begin(), bType,
@@ -101,7 +170,7 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
   }
   hipDeviceSynchronize();
 
-  end = std::chrono::steady_clock::now();
+  auto end = std::chrono::steady_clock::now();
 
   return static_cast<int>(
       std::chrono::duration<double, std::micro>(end - start).count() /
@@ -137,22 +206,24 @@ int main(int argc, char **argv) {
 
     for (const auto &problem : inference_server_set) {
       int m, n, k;
-      bool a_t, b_t;
-      std::tie(m, n, k, a_t, b_t) = problem;
+      bool a_t, b_t, enable_tune;
+      std::tie(m, n, k, a_t, b_t, enable_tune) = problem;
       int time_us;
 
       std::cout << m << ",";
       std::cout << n << ",";
       std::cout << k << ",";
       std::cout << (a_t ? "t" : "n") << ",";
-      std::cout << (b_t ? "t" : "n");
+      std::cout << (b_t ? "t" : "n") << ",";
+      std::cout << (enable_tune ? "1" : "0");
 
       // fp32-f32 benchmark
       {
         auto a = rand<float>({a_t ? k : m, a_t ? m : k}, hiprand_gen);
         auto b = rand<float>({b_t ? n : k, b_t ? k : n}, hiprand_gen);
         auto c = zeros<float>({m, n});
-        time_us = time_gemm<float, float>(a, b, c, a_t, b_t, rocblas_handle);
+        time_us = time_gemm<float, float>(a, b, c, a_t, b_t, rocblas_handle,
+                                          enable_tune);
         std::cout << "," << std::setprecision(6) << time_us / 1000.0;
       }
       // fp16-f32 benchmark
@@ -160,8 +231,8 @@ int main(int argc, char **argv) {
         auto a = rand<uint16_t>({a_t ? k : m, a_t ? m : k}, hiprand_gen);
         auto b = rand<uint16_t>({b_t ? n : k, b_t ? k : n}, hiprand_gen);
         auto c = zeros<uint32_t>({m, n});
-        time_us =
-            time_gemm<uint16_t, uint32_t>(a, b, c, a_t, b_t, rocblas_handle);
+        time_us = time_gemm<uint16_t, uint32_t>(a, b, c, a_t, b_t,
+                                                rocblas_handle, enable_tune);
         std::cout << "," << std::setprecision(6) << time_us / 1000.0;
       }
       // fp16-f16 benchmark
@@ -169,8 +240,8 @@ int main(int argc, char **argv) {
         auto a = rand<uint16_t>({a_t ? k : m, a_t ? m : k}, hiprand_gen);
         auto b = rand<uint16_t>({b_t ? n : k, b_t ? k : n}, hiprand_gen);
         auto c = zeros<uint16_t>({m, n});
-        time_us =
-            time_gemm<uint16_t, uint16_t>(a, b, c, a_t, b_t, rocblas_handle);
+        time_us = time_gemm<uint16_t, uint16_t>(a, b, c, a_t, b_t,
+                                                rocblas_handle, enable_tune);
         std::cout << "," << std::setprecision(6) << time_us / 1000.0;
       }
 
@@ -186,8 +257,8 @@ int main(int argc, char **argv) {
         auto a = rand<uint8_t>({a_t ? k : pad_m, a_t ? pad_m : k}, hiprand_gen);
         auto b = rand<uint8_t>({b_t ? n : k, b_t ? k : n}, hiprand_gen);
         auto c = zeros<uint32_t>({pad_m, n});
-        time_us =
-            time_gemm<uint8_t, uint32_t>(a, b, c, a_t, b_t, rocblas_handle);
+        time_us = time_gemm<uint8_t, uint32_t>(a, b, c, a_t, b_t,
+                                               rocblas_handle, enable_tune);
         std::cout << "," << std::setprecision(6) << time_us / 1000.0;
       }
 
