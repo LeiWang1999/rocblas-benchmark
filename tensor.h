@@ -58,13 +58,19 @@ rand(std::vector<int> dims, hiprandGenerator_t hiprand_gen) {
 }
 
 template <typename T>
-typename std::enable_if<!(std::is_same<T, float>::value), Tensor<T>>::type
+typename std::enable_if<(std::is_same<T, half>::value), Tensor<T>>::type
 rand(std::vector<int> dims, hiprandGenerator_t hiprand_gen) {
-
   Tensor<T> tensor(dims);
-  Tensor<float> tensor_f(dims);
-  hiprandGenerateUniform(hiprand_gen, tensor_f.begin(), tensor_f.size());
-  thrust::copy(tensor_f.begin(), tensor_f.end(), tensor.begin());
+  hiprandGenerateUniformHalf(hiprand_gen, tensor.begin(), tensor.size());
+  return tensor;
+}
+
+template <typename T>
+typename std::enable_if<(std::is_same<T, uint8_t>::value), Tensor<T>>::type
+rand(std::vector<int> dims, hiprandGenerator_t hiprand_gen)
+{
+  Tensor<T> tensor(dims);
+  hiprandGenerateChar(hiprand_gen, tensor.begin(), tensor.size());
   return tensor;
 }
 

@@ -19,11 +19,40 @@
     throw std::runtime_error(ss.str());                                        \
   }
 
+bool enable_tune = false;
 // Vector saves m, n, k, a_t, b_t, enable_tune
 std::vector<std::tuple<int, int, int, bool, bool, bool>> inference_server_set =
     {
-        std::make_tuple(1024, 1024, 1024, false, false, false),
-        std::make_tuple(1024, 1024, 1024, false, false, true),
+        // std::make_tuple(1024, 1024, 1024, false, false, enable_tune),
+        std::make_tuple(16384, 16384, 16384, false, false, enable_tune),
+        // std::make_tuple(8192, 43008, 14336, false, false, enable_tune),
+        // std::make_tuple(8192, 14336, 14336, false, false, enable_tune),
+        // std::make_tuple(8192, 57344, 14336, false, false, enable_tune),
+        // std::make_tuple(8192, 14336, 57344, false, false, enable_tune),
+        // std::make_tuple(8192, 9216, 9216, false, false, enable_tune),
+        // std::make_tuple(8192, 36864, 9216, false, false, enable_tune),
+        // std::make_tuple(8192, 9216, 36864, false, false, enable_tune),
+        // std::make_tuple(8192, 22016, 8192, false, false, enable_tune),
+        // std::make_tuple(8192, 8192, 22016, false, false, enable_tune),
+        // std::make_tuple(8192, 8192, 8192, false, false, enable_tune),
+        // std::make_tuple(8192, 28672, 8192, false, false, enable_tune),
+        // std::make_tuple(8192, 8192, 28672, false, false, enable_tune),
+
+        // std::make_tuple(1024, 1024, 1024, false, true, enable_tune),
+        // std::make_tuple(16384, 16384, 16384, false, true, enable_tune),
+        // std::make_tuple(8192, 43008, 14336, false, true, enable_tune),
+        // std::make_tuple(8192, 14336, 14336, false, true, enable_tune),
+        // std::make_tuple(8192, 57344, 14336, false, true, enable_tune),
+        // std::make_tuple(8192, 14336, 57344, false, true, enable_tune),
+        // std::make_tuple(8192, 9216, 9216, false, true, enable_tune),
+        // std::make_tuple(8192, 36864, 9216, false, true, enable_tune),
+        // std::make_tuple(8192, 9216, 36864, false, true, enable_tune),
+        // std::make_tuple(8192, 22016, 8192, false, true, enable_tune),
+        // std::make_tuple(8192, 8192, 22016, false, true, enable_tune),
+        // std::make_tuple(8192, 8192, 8192, false, true, enable_tune),
+        // std::make_tuple(8192, 28672, 8192, false, true, enable_tune),
+        // std::make_tuple(8192, 8192, 28672, false, true, enable_tune),
+
 };
 
 template <typename T1, typename T2>
@@ -55,13 +84,13 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
   int32_t solutionIndex = 0;
   uint32_t flags = 0;
 
-  if (std::is_same<T1, uint16_t>::value) {
+  if (std::is_same<T1, half>::value) {
     aType = rocblas_datatype_f16_r;
     bType = rocblas_datatype_f16_r;
     cType = rocblas_datatype_f16_r;
     dType = rocblas_datatype_f16_r;
     computeType = rocblas_datatype_f16_r;
-    if (std::is_same<T2, uint32_t>::value) {
+    if (std::is_same<T2, float>::value) {
       cType = rocblas_datatype_f32_r;
       dType = rocblas_datatype_f32_r;
       computeType = rocblas_datatype_f32_r;
@@ -228,20 +257,20 @@ int main(int argc, char **argv) {
       }
       // fp16-f32 benchmark
       {
-        auto a = rand<uint16_t>({a_t ? k : m, a_t ? m : k}, hiprand_gen);
-        auto b = rand<uint16_t>({b_t ? n : k, b_t ? k : n}, hiprand_gen);
-        auto c = zeros<uint32_t>({m, n});
-        time_us = time_gemm<uint16_t, uint32_t>(a, b, c, a_t, b_t,
-                                                rocblas_handle, enable_tune);
+        auto a = rand<half>({a_t ? k : m, a_t ? m : k}, hiprand_gen);
+        auto b = rand<half>({b_t ? n : k, b_t ? k : n}, hiprand_gen);
+        auto c = zeros<float>({m, n});
+        time_us = time_gemm<half, float>(a, b, c, a_t, b_t,
+                                         rocblas_handle, enable_tune);
         std::cout << "," << std::setprecision(6) << time_us / 1000.0;
       }
       // fp16-f16 benchmark
       {
-        auto a = rand<uint16_t>({a_t ? k : m, a_t ? m : k}, hiprand_gen);
-        auto b = rand<uint16_t>({b_t ? n : k, b_t ? k : n}, hiprand_gen);
-        auto c = zeros<uint16_t>({m, n});
-        time_us = time_gemm<uint16_t, uint16_t>(a, b, c, a_t, b_t,
-                                                rocblas_handle, enable_tune);
+        auto a = rand<half>({a_t ? k : m, a_t ? m : k}, hiprand_gen);
+        auto b = rand<half>({b_t ? n : k, b_t ? k : n}, hiprand_gen);
+        auto c = zeros<half>({m, n});
+        time_us = time_gemm<half, half>(a, b, c, a_t, b_t,
+                                        rocblas_handle, enable_tune);
         std::cout << "," << std::setprecision(6) << time_us / 1000.0;
       }
 
