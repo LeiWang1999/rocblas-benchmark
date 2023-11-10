@@ -23,35 +23,33 @@ bool enable_tune = false;
 // Vector saves m, n, k, a_t, b_t, enable_tune
 std::vector<std::tuple<int, int, int, bool, bool, bool>> inference_server_set =
     {
-        // std::make_tuple(1024, 1024, 1024, false, false, enable_tune),
         std::make_tuple(16384, 16384, 16384, false, false, enable_tune),
-        // std::make_tuple(8192, 43008, 14336, false, false, enable_tune),
-        // std::make_tuple(8192, 14336, 14336, false, false, enable_tune),
-        // std::make_tuple(8192, 57344, 14336, false, false, enable_tune),
-        // std::make_tuple(8192, 14336, 57344, false, false, enable_tune),
-        // std::make_tuple(8192, 9216, 9216, false, false, enable_tune),
-        // std::make_tuple(8192, 36864, 9216, false, false, enable_tune),
-        // std::make_tuple(8192, 9216, 36864, false, false, enable_tune),
-        // std::make_tuple(8192, 22016, 8192, false, false, enable_tune),
-        // std::make_tuple(8192, 8192, 22016, false, false, enable_tune),
-        // std::make_tuple(8192, 8192, 8192, false, false, enable_tune),
-        // std::make_tuple(8192, 28672, 8192, false, false, enable_tune),
-        // std::make_tuple(8192, 8192, 28672, false, false, enable_tune),
+        std::make_tuple(8192, 43008, 14336, false, false, enable_tune),
+        std::make_tuple(8192, 14336, 14336, false, false, enable_tune),
+        std::make_tuple(8192, 57344, 14336, false, false, enable_tune),
+        std::make_tuple(8192, 14336, 57344, false, false, enable_tune),
+        std::make_tuple(8192, 9216, 9216, false, false, enable_tune),
+        std::make_tuple(8192, 36864, 9216, false, false, enable_tune),
+        std::make_tuple(8192, 9216, 36864, false, false, enable_tune),
+        std::make_tuple(8192, 22016, 8192, false, false, enable_tune),
+        std::make_tuple(8192, 8192, 22016, false, false, enable_tune),
+        std::make_tuple(8192, 8192, 8192, false, false, enable_tune),
+        std::make_tuple(8192, 28672, 8192, false, false, enable_tune),
+        std::make_tuple(8192, 8192, 28672, false, false, enable_tune),
 
-        // std::make_tuple(1024, 1024, 1024, false, true, enable_tune),
-        // std::make_tuple(16384, 16384, 16384, false, true, enable_tune),
-        // std::make_tuple(8192, 43008, 14336, false, true, enable_tune),
-        // std::make_tuple(8192, 14336, 14336, false, true, enable_tune),
-        // std::make_tuple(8192, 57344, 14336, false, true, enable_tune),
-        // std::make_tuple(8192, 14336, 57344, false, true, enable_tune),
-        // std::make_tuple(8192, 9216, 9216, false, true, enable_tune),
-        // std::make_tuple(8192, 36864, 9216, false, true, enable_tune),
-        // std::make_tuple(8192, 9216, 36864, false, true, enable_tune),
-        // std::make_tuple(8192, 22016, 8192, false, true, enable_tune),
-        // std::make_tuple(8192, 8192, 22016, false, true, enable_tune),
-        // std::make_tuple(8192, 8192, 8192, false, true, enable_tune),
-        // std::make_tuple(8192, 28672, 8192, false, true, enable_tune),
-        // std::make_tuple(8192, 8192, 28672, false, true, enable_tune),
+        std::make_tuple(16384, 16384, 16384, false, true, enable_tune),
+        std::make_tuple(8192, 43008, 14336, false, true, enable_tune),
+        std::make_tuple(8192, 14336, 14336, false, true, enable_tune),
+        std::make_tuple(8192, 57344, 14336, false, true, enable_tune),
+        std::make_tuple(8192, 14336, 57344, false, true, enable_tune),
+        std::make_tuple(8192, 9216, 9216, false, true, enable_tune),
+        std::make_tuple(8192, 36864, 9216, false, true, enable_tune),
+        std::make_tuple(8192, 9216, 36864, false, true, enable_tune),
+        std::make_tuple(8192, 22016, 8192, false, true, enable_tune),
+        std::make_tuple(8192, 8192, 22016, false, true, enable_tune),
+        std::make_tuple(8192, 8192, 8192, false, true, enable_tune),
+        std::make_tuple(8192, 28672, 8192, false, true, enable_tune),
+        std::make_tuple(8192, 8192, 28672, false, true, enable_tune),
 
 };
 
@@ -89,7 +87,7 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
     bType = rocblas_datatype_f16_r;
     cType = rocblas_datatype_f16_r;
     dType = rocblas_datatype_f16_r;
-    computeType = rocblas_datatype_f16_r;
+    computeType = rocblas_datatype_f32_r;
     if (std::is_same<T2, float>::value) {
       cType = rocblas_datatype_f32_r;
       dType = rocblas_datatype_f32_r;
@@ -173,7 +171,7 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
 
   auto start = std::chrono::steady_clock::now();
 
-  stat = rocblas_gemm_ex(rocblas_handle, transA, transB, m, n, k, &alpha,
+  stat = rocblas_gemm_ex(rocblas_handle, transB, transA, m, n, k, &alpha,
                         B.begin(), bType, B.dims()[1], A.begin(), aType, 
                         A.dims()[1], &beta, C.begin(), cType, m, 
                         C.begin(), cType, m, computeType, algo,
@@ -187,7 +185,7 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
   start = std::chrono::steady_clock::now();
 
   for (int i = 0; i < numRepeats; ++i) {
-    stat = rocblas_gemm_ex(rocblas_handle, transA, transB, m, n, k, &alpha,
+    stat = rocblas_gemm_ex(rocblas_handle, transB, transA, m, n, k, &alpha,
                           B.begin(), bType, B.dims()[1], A.begin(), aType,
                           A.dims()[1], &beta, C.begin(), cType, m,
                           C.begin(), cType, m, computeType, algo,
