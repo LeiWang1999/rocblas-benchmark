@@ -59,9 +59,9 @@ template <typename T1, typename T2>
 int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
               rocblas_handle rocblas_handle, bool enable_tune = true) {
 
-  int m = C.dims()[0];
+  int m = b_t ? B.dims()[0] : B.dims()[1];
+  int n = a_t ? A.dims()[1] : A.dims()[0];
   int k = a_t ? A.dims()[0] : A.dims()[1];
-  int n = C.dims()[1];
   int warp_up_iters = 1;
   int numRepeats = 10;
 
@@ -138,9 +138,9 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
       for (rocblas_int c = 0; c < warp_up_iters; ++c) {
         // run with solutions
         CHECK_ROCBLAS_ERROR(rocblas_gemm_ex(
-            rocblas_handle, transA, transB, m, n, k, &alpha, A.begin(), aType,
-            A.dims()[0], B.begin(), bType, B.dims()[0], &beta, C.begin(), cType,
-            C.dims()[0], C.begin(), cType, C.dims()[0], computeType, algo,
+            rocblas_handle, transB, transA, m, n, k, &alpha, B.begin(), bType,
+            B.dims()[1], A.begin(), aType, A.dims()[1], &beta, C.begin(), cType,
+            m, C.begin(), cType, m, computeType, algo,
             solutionIndex, flags));
       }
       hipStream_t stream;
@@ -150,9 +150,9 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
       // timing loop
       for (rocblas_int c = 0; c < numRepeats; ++c) {
         CHECK_ROCBLAS_ERROR(rocblas_gemm_ex(
-            rocblas_handle, transA, transB, m, n, k, &alpha, A.begin(), aType,
-            A.dims()[0], B.begin(), bType, B.dims()[0], &beta, C.begin(), cType,
-            C.dims()[0], C.begin(), cType, C.dims()[0], computeType, algo,
+            rocblas_handle, transB, transA, m, n, k, &alpha, B.begin(), bType,
+            B.dims()[1], A.begin(), aType, A.dims()[1], &beta, C.begin(), cType,
+            m, C.begin(), cType, m, computeType, algo,
             solutionIndex, flags));
       }
 
@@ -174,10 +174,10 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
   auto start = std::chrono::steady_clock::now();
 
   stat = rocblas_gemm_ex(rocblas_handle, transA, transB, m, n, k, &alpha,
-                         A.begin(), aType, A.dims()[0], B.begin(), bType,
-                         B.dims()[0], &beta, C.begin(), cType, C.dims()[0],
-                         C.begin(), cType, C.dims()[0], computeType, algo,
-                         solutionIndex, flags);
+                        B.begin(), bType, B.dims()[1], A.begin(), aType, 
+                        A.dims()[1], &beta, C.begin(), cType, m, 
+                        C.begin(), cType, m, computeType, algo,
+                        solutionIndex, flags);
   if (stat != rocblas_status_success) {
     throw std::runtime_error("gemm failed");
   }
@@ -188,10 +188,10 @@ int time_gemm(Tensor<T1> A, Tensor<T1> B, Tensor<T2> C, bool a_t, bool b_t,
 
   for (int i = 0; i < numRepeats; ++i) {
     stat = rocblas_gemm_ex(rocblas_handle, transA, transB, m, n, k, &alpha,
-                           A.begin(), aType, A.dims()[0], B.begin(), bType,
-                           B.dims()[0], &beta, C.begin(), cType, C.dims()[0],
-                           C.begin(), cType, C.dims()[0], computeType, algo,
-                           solutionIndex, flags);
+                          B.begin(), bType, B.dims()[1], A.begin(), aType,
+                          A.dims()[1], &beta, C.begin(), cType, m,
+                          C.begin(), cType, m, computeType, algo,
+                          solutionIndex, flags);
 
     if (stat != rocblas_status_success) {
       throw std::runtime_error("gemm failed");
