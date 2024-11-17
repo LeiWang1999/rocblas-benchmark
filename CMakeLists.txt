@@ -8,6 +8,8 @@ set(CMAKE_CXX_COMPILER hipcc)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_PREFIX_PATH "/opt/rocm")
+
 find_package(rocblas REQUIRED)  
 find_package(rocprim REQUIRED)  
 find_package(rocthrust  REQUIRED)  
